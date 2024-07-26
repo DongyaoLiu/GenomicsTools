@@ -7,23 +7,26 @@ from Bio.SeqFeature import SeqFeature
 from Bio.SeqFeature import FeatureLocation, CompoundLocation
 
 # Create an ArgumentParser object
-parser = argparse.ArgumentParser(description='Read two files')
+parser = argparse.ArgumentParser(description='The simple script is designed for subset gbk file mainly from funannotation result.')
 
 # Add the file arguments
-parser.add_argument('-fasta', type=str, help='Path to the first file')
-parser.add_argument('-gene_list', type=str, help='Path to the second file')
+parser.add_argument('-fasta', type=str, help='Path to the fasta file')
+parser.add_argument('-gene_list', type=str, help='Path to the gene_list genebank<strain Start End Chr>')
 parser.add_argument("-folder", type=str, help="Path to the gff folder")
-parser.add_argument("-extract_type", type=str, help="Path to the gff folder")
+parser.add_argument("-extract_type", type=str, help="<mRNA> <genebank> <gff> <protein>")
 parser.add_argument("-suffix", type=str, help="suffix of your extract out put")
+parser.add_argument("-extend_mode", type=str, help="<specific> <genewise>")
+parser.add_argument("-extend_left", type=int, help="specify the gene unit you want to extend or base pair")
+parser.add_argument("-extend_right", type=int, help="specify the gene unit you want to extend or base pair")
 
 # Parse the command-line arguments
 args = parser.parse_args()
 
 
 
-def extend_region(mode="", gene_name="", number=[0,0]):
-    ##if we use gene as a unit to do extension 
-    if mode == "gene":
+def extend_region(mode="spcific", gene_name="", number=[1,1]):
+    ##if we use gene as a unit to do extension the region 
+    if mode == "genewise":
         left_flanking = number[0]
         right_flanking = number[1]
         gene_number = int(re.search(r"([0-9]+)", gene_name).group(1))
@@ -64,7 +67,6 @@ with open(args.gene_list, "r") as gene_list_file:
 
             # Iterate over each record in the input GenBank file
             for record in SeqIO.parse(input_file, "genbank"):
-                print(record)
                 if re.search(locus, record.id):
                     # Subset the sequence based on the desired region
                     subseq = record.seq[start:end]
