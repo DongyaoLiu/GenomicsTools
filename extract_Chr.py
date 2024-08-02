@@ -4,7 +4,6 @@ import argparse
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-c
 # Create an ArgumentParser object
 parser = argparse.ArgumentParser(description='The simple script is designed for extract one or more complate Scaffold/Chr')
 
@@ -18,9 +17,9 @@ args = parser.parse_args()
 
 def extract_Chr(parsed_fasta, id):
 	for sequence in parsed_fasta:
-	    if sequence.id == id:
-		return sequence
-		break
+		if sequence.id == id:
+			return sequence
+			break
 
 def write_Chr(select_sequence, filename):
 	with open(filename, 'w') as f:
@@ -29,9 +28,9 @@ def write_Chr(select_sequence, filename):
 def parse_Chrlist(Chrlist):
 	ChrDict = {}
 	for Chr in Chrlist.readlines():
-                line_elements = Chr.split("\t")
+		line_elements = Chr.split("\t")
 		Genome = f"{args.fasta_fold}/{line_elements[0]}"
-                Chr = [line_elements[1]]
+		Chr = [line_elements[1]]
 		if ChrDict.has_key(Genome):
 			TmpChr = ChrDict[Genome] + Chr
 			ChrDict[Genome] = TmpChr
