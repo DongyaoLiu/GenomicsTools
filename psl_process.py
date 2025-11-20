@@ -59,6 +59,52 @@ def get_sequence(fasta_file, seq_id, start, end, size, strand='+'):
         
     return sub_seq
 
+def aligment_analysis(align_obj, target, query, output, species, pattern, name, start, end, size, strand):
+    alignment_str = str(align_obj)
+    lines = alignment_str.strip().split('\n')
+    
+    target_line = lines[0]
+    middle_line = lines[1]
+    query_line = lines[2]
+    
+    matches = middle_line.count('|')
+    mismatches = middle_line.count('.')  # Similar but not identical
+    gaps = target_line.count('-')
+
+    #for checking the coordinates
+    target_aligned_start = align_obj.aligned[0][0][0]
+    target_aligned_end = align_obj.aligned[0][-1][-1]
+    target_aligned = target[target_aligned_start:target_aligned_end] 
+    
+    #for checking the coordinates
+    query_aligned_start = align_obj.aligned[1][0][0]
+    query_aligned_end = align_obj.aligned[1][-1][1]
+    query_aligned = query[query_aligned_start:query_aligned_end]
+
+    
+    #check the unaligned the head and tail and force to generate the full length of miRNA in the homogly region...in the target
+    head = query_aligned_start
+    tail = len(query) - query_aligned_end 
+    target_aligned_start2 = target_aligned_start - head
+    target_aligned_end2 = target_aligned_end + tail
+    target_miRNA_predict = target[target_aligned_start2:target_aligned_end2]
+
+    
+    with open(output, "a") as file_out:
+        file_out.write(f"{species}\t{pattern}\t{target_aligned}\t{query_aligned}\t{matches}\t{mismatches}\t{gaps}\t{target_miRNA_predict}\t{query}\t{name}\t{start}\t{end}\t{size}\t{strand}\n")
+        file_out.close()
+        
+
+    
+    matches = middle_line.count('|')
+    positives = middle_line.count('.')  # Similar but not identical
+    mismatches = len([i for i, (t, q) in enumerate(zip(target_line, query_line)) 
+                     if t != q and t != '-' and q != '-' and middle_line[i] not in '|.'])
+    gaps = target_line.count('-') + query_line.count('-')
+    
+    return matches, mismatches, gaps
+
+
 
 def align2(psl_filename, query_fasta, target_fasta, miRNA_fasta, output):
     aligner = PairwiseAligner(match_score = 1, mismatch_score = -0.5, mode = "global")
@@ -101,8 +147,6 @@ def align2(psl_filename, query_fasta, target_fasta, miRNA_fasta, output):
             except Exception as e:
                 print(f"Error processing miRNA {e}")
 
-            
-                       
             try:
                 # Extract sequences using only start/end/strand info
                 query_strand = rec['strand'][0]  # Gets the first character of strand
@@ -118,8 +162,9 @@ def align2(psl_filename, query_fasta, target_fasta, miRNA_fasta, output):
                 #remove too short alignment
                 if len(query_seq) <= 18 or len(target_seq) <= 18:
                     with open(output, "a") as file_out:
-                        file_out.write(f"{species}\t{pattern}\tNA\n")
-                    continue 
+                        file_out.write(f"{species}\t{pattern}\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n")
+                        file_out.close()
+                    continue
                 
 
                 
@@ -141,10 +186,11 @@ def align2(psl_filename, query_fasta, target_fasta, miRNA_fasta, output):
                     
                     print(f"Query: {k} ")
                     print(f"Query aligned to the Target: {target_fasta}")
-                    print(aligner.align(target_seq, str(v.seq).replace('U', 'T').replace('u', 't'))[0])
-                
-            
-                # Print alignment score information
+                    align_obj = aligner.align(target_seq, str(v.seq).replace('U', 'T').replace('u', 't'))
+                    print(align_obj[0])
+
+                    aligment_analysis(align_obj[0], target_seq, str(v.seq).replace('U', 'T').replace('u', 't'), 
+                                     output, species, pattern, rec['tName'], rec['tStart'], rec['tEnd'], rec['tSize'], target_strand)
                 print(f"Biopython Alignment Score: {best_alignment.score:.2f}")
                 
             except Exception as e:
@@ -182,7 +228,4 @@ perform pairwise alignment with Biopython, and display in BLAST-like format.
     args = parser.parse_args()
     main(args.psl_file, 
          args.qfasta, args.tfasta, args.mirfasta, args.output)
-
-
-
 
