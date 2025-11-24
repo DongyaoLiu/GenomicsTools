@@ -59,6 +59,69 @@ def get_sequence(fasta_file, seq_id, start, end, size, strand='+'):
         
     return sub_seq
 
+
+
+# wait for exploration
+def X626(psl_dict, gap = 10):
+    # no strand info be considered 
+    # {Chr start end strand}
+
+
+    query_ID_list = []
+    duplicated_ID_dict = {} # for duplicated ID
+    
+    for line_number, rec in psl_dict.items():
+        miRNA_ID = rec['miRNA']
+        if miRNA_ID in duplicated_ID_dict.keys():
+            duplicated_ID_dict[miRNA_ID].append(rec)            
+        else:        
+            duplicated_ID_dict[miRNA_ID] = [rec]
+    
+    output_dict = {}
+    #process major ligation function.
+    for miRNA, rec_list in duplicated_ID_dict.items():
+        if len(rec_list) >= 2:
+        
+            target_name_list = []
+            target_start_list = []
+            target_end_list = []
+            target_strand_list = []
+
+            query_name_list = []
+            query_start_list = []
+            query_end_list = []
+            query_strand_list = []
+
+            for i in range(len(rec_list)):
+               
+                target_name_list.append(rec_list[i]["tName"]) 
+                target_start_list.append(rec_list[i]["tStart"])
+                target_end_list.append(rec_list[i]["tEnd"])
+                target_strand_list.append(rec_list[i]["strand"][1])
+                
+                query_name_list.append(rec_list[i]["qName"])
+                query_start_list.append(rec_list[i]["qStart"])
+                query_end_list.append(rec_list[i]["qEnd"])
+                query_strand_list.append(rec_list[i]["strand"][0])
+
+            uniq_tname = list(set(target_name_list))
+            uniq_qname = list(set(query_name_list)) 
+            
+            plus_t_index = [index for index, element in enumerate(target_strand_list) if element == "+"] 
+            minus_t_index = [index for index, element in enumerate(target_strand_list) if element == "-"]
+            plus_q_index = [index for index, element in enumerate(query_strand_list) if element == "+"]
+            minus_q_index =[index for index, element in enumerate(query_strand_list) if element == "-"]  
+            
+             
+
+        else:
+            # add a tag for Stitched record 
+            rec_list[0]["Stitched"] = "True"  
+            output_dict = rec_list[0] # remove the [] 
+
+    return psl_dict
+
+
 def aligment_analysis(align_obj, target, query, output, species, pattern, name, start, end, size, strand):
     alignment_str = str(align_obj)
     lines = alignment_str.strip().split('\n')
@@ -115,88 +178,106 @@ def align2(psl_filename, query_fasta, target_fasta, miRNA_fasta, output):
     
     miRNA_dict = SeqIO.to_dict(SeqIO.parse(miRNA_fasta, "fasta"))
     print(target_fasta)
-    species = re.search(r"(Cae[a-z_]+)", target_fasta).group(1)
+    species = re.search(r"Caenorhabditis_elegans_(.+).psl", psl_filename).group(1)
 
+
+    # create the dictionary for the psl file, used for find the lines has same query region.
+    psl_dict = {}
     with open(psl_filename, 'r') as psl_file:
         for line_num, line in enumerate(psl_file):
             #if line_num < 5:  # Skip PSL header lines
             #    continue
             if not line.strip():
                 continue
-                
-            print(f"\n{'='*80}")
-            print(f"Processing PSL record #{line_num}")
-            print(f"{'='*80}")
-            
             rec = parse_psl(line)
             if rec is None:
                 print(f"Skipping malformed line: {line}")
                 continue
-            print(f"miRNA : {rec['miRNA']}") 
-            print(f"Alignment: {rec['qName']} (Query) vs {rec['tName']} (Target)")
-            print(f"PSL Score: {rec['matches']} matches, {rec['misMatches']} mismatches")
-            print(f"Strand: {rec['strand']}")
-            print(f"Query: {rec['qStart']}-{rec['qEnd']} (of {rec['qSize']})")
-            print(f"Target: {rec['tStart']}-{rec['tEnd']} (of {rec['tSize']})")
+            psl_dict[line_num] = rec  
+    
+    psl_dict = X626(psl_dict, gap=10)
+    
+    for line_num, rec in psl_dict.items():
+        
+        print(f"\n{'='*80}")
+        print(f"Processing PSL record #{line_num}")
+        print(f"{'='*80}")
+        print(f"miRNA : {rec['miRNA']}") 
+        print(f"Alignment: {rec['qName']} (Query) vs {rec['tName']} (Target)")
+        print(f"PSL Score: {rec['matches']} matches, {rec['misMatches']} mismatches")
+        print(f"Strand: {rec['strand']}")
+        print(f"Query: {rec['qStart']}-{rec['qEnd']} (of {rec['qSize']})")
+        print(f"Target: {rec['tStart']}-{rec['tEnd']} (of {rec['tSize']})")
 
+        try:
+
+            pattern = re.search(r'ID=([^_]+)_pre', rec['miRNA']).group(1)
+            miRNA = {k: v for k, v in miRNA_dict.items() if re.search(f"{pattern}_[53]p", k)}
+
+
+        except Exception as e:
+            print(f"Error processing miRNA {e}")
+
+        try:
+            # Extract sequences using only start/end/strand info
+            query_strand = rec['strand'][0]  # Gets the first character of strand
+            target_strand = rec['strand'][1] # Gets the second character of strand
+
+            #extract the sequence
+            #pay attention to the strand information
+            
+            query_seq = get_sequence(query_fasta, rec['qName'], rec['qStart'], rec['qEnd'], rec['qSize'],query_strand)
+            target_seq = get_sequence(target_fasta, rec['tName'], rec['tStart'], rec['tEnd'], rec['tSize'],target_strand)
+            
+
+            #remove too short alignment
+            if len(query_seq) <= 18 or len(target_seq) <= 18:
+                with open(output, "a") as file_out:
+                    file_out.write(f"{species}\t{pattern}\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n")
+                    file_out.close()
+                continue
+            
+
+            
+            print(">query_seq")
+            print(f"{query_seq}")
+            print(">target_seq")
+            print(f"{target_seq}")
+            
+            # Perform pairwise alignment
+            alignments = aligner.align(target_seq, query_seq)
             try:
-                pattern = re.search(r'ID=([^_]+)_pre', rec['miRNA']).group(1)
-                miRNA = {k: v for k, v in miRNA_dict.items() if re.search(f"{pattern}_[53]p", k)}
-
-
-            except Exception as e:
-                print(f"Error processing miRNA {e}")
-
-            try:
-                # Extract sequences using only start/end/strand info
-                query_strand = rec['strand'][0]  # Gets the first character of strand
-                target_strand = rec['strand'][1] # Gets the second character of strand
-
-                #extract the sequence
-                #pay attention to the strand information
-                
-                query_seq = get_sequence(query_fasta, rec['qName'], rec['qStart'], rec['qEnd'], rec['qSize'],query_strand)
-                target_seq = get_sequence(target_fasta, rec['tName'], rec['tStart'], rec['tEnd'], rec['tSize'],target_strand)
-                
-
-                #remove too short alignment
-                if len(query_seq) <= 18 or len(target_seq) <= 18:
-                    with open(output, "a") as file_out:
-                        file_out.write(f"{species}\t{pattern}\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n")
-                        file_out.close()
-                    continue
-                
-
-                
-                print(">query_seq")
-                print(f"{query_seq}")
-                print(">target_seq")
-                print(f"{target_seq}")
-                
-                # Perform pairwise alignment
-                alignments = aligner.align(target_seq, query_seq)
                 best_alignment = alignments[0]  # Take the top alignment
                 print(best_alignment)
+            except IndexError:
+                with open(output, "a") as file_out:
+                    file_out.write(f"{species}\t{pattern}\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n")
+                    file_out.close()
+                continue
+            
+            for k,v in miRNA.items():
+                aligner.mode = "local"
+                print(f"Query: {k}")
+                print(f"Query aligned to the C. elegans region query region")
+                print(aligner.align(query_seq, str(v.seq).replace('U', 'T').replace('u', 't'))[0])
                 
-                for k,v in miRNA.items():
-                    aligner.mode = "local"
-                    print(f"Query: {k}")
-                    print(f"Query aligned to the C. elegans region query region")
-                    print(aligner.align(query_seq, str(v.seq).replace('U', 'T').replace('u', 't'))[0])
-                    
-                    print(f"Query: {k} ")
-                    print(f"Query aligned to the Target: {target_fasta}")
-                    align_obj = aligner.align(target_seq, str(v.seq).replace('U', 'T').replace('u', 't'))
+                print(f"Query: {k} ")
+                print(f"Query aligned to the Target: {target_fasta}")
+                align_obj = aligner.align(target_seq, str(v.seq).replace('U', 'T').replace('u', 't'))
+                try:
                     print(align_obj[0])
-
                     aligment_analysis(align_obj[0], target_seq, str(v.seq).replace('U', 'T').replace('u', 't'), 
-                                     output, species, pattern, rec['tName'], rec['tStart'], rec['tEnd'], rec['tSize'], target_strand)
-                print(f"Biopython Alignment Score: {best_alignment.score:.2f}")
-                
-            except Exception as e:
-                print(f"Error processing record: {e}")
-                import traceback
-                traceback.print_exc()
+                                 output, species, pattern, rec['tName'], rec['tStart'], rec['tEnd'], rec['tSize'], target_strand)
+                    
+                    print(f"Biopython Alignment Score: {best_alignment.score:.2f}")
+                except IndexError:
+                    file_out.write(f"{species}\t{pattern}\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n")
+                    file_out.close()
+            
+        except Exception as e:
+            print(f"Error processing record: {e}")
+            import traceback
+            traceback.print_exc()
 
 
 
