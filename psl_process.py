@@ -150,6 +150,11 @@ def aligment_analysis(align_obj, target, query, output, species, pattern, name, 
     tail = len(query) - query_aligned_end 
     target_aligned_start2 = target_aligned_start - head
     target_aligned_end2 = target_aligned_end + tail
+    if target_aligned_start2 < 0:
+        target_aligned_start2 = 0
+    if target_aligned_end2 > len(target):
+        target_aligned_end2 = len(target)
+
     target_miRNA_predict = target[target_aligned_start2:target_aligned_end2]
 
     
