@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import re
+import os
 import argparse
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -49,8 +50,32 @@ class GenBankExtractor:
         Returns:
             SeqRecord: A SeqRecord object containing the extracted region.
         """
-        input_file = f"{self.input_folder}/caenorhabditis_{strain}.gbk"
-        output_file = f"{self.input_folder}/caenorhabditis_{strain}.{self.output_suffix}.gbk"
+        
+        input_folder = self.input_folder
+
+        # Escape special regex characters in strain
+        escaped_strain = re.escape(strain)
+
+        # Pattern: any characters, then the strain, then .gbk at the end
+        pattern = re.compile(rf'.*{escaped_strain}.*\.gbk$')
+
+        matching_files = []
+        for filename in os.listdir(input_folder):
+            if pattern.match(filename):
+                matching_files.append(os.path.join(input_folder, filename))
+
+        # Handle results
+        if len(matching_files) == 1:
+            input_file = matching_files[0]
+        elif len(matching_files) == 0:
+            raise FileNotFoundError(f"No .gbk file containing strain '{strain}' found in {input_folder}")
+        else:
+            # Optional: prefer exact match or shortest name, or just raise error
+            raise ValueError(f"Multiple .gbk files contain strain '{strain}': {matching_files}")
+        
+        
+        #input_file = f"{self.input_folder}/caenorhabditis_{strain}.gbk"
+        output_file = f"{self.input_folder}/{self.output_suffix}.gbk"
 
         for record in SeqIO.parse(input_file, "genbank"):
             if re.search(chromosome, record.id):
