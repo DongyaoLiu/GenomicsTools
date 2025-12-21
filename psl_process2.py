@@ -23,7 +23,7 @@ def print_memory_usage(label=""):
     print(f"{label}: {process.memory_info().rss / 1024 / 1024:.2f} MB")
 
 # ------------------------------------------------
-# extract the sequence
+# extract the sequence inclusive bi-side base on the 1-based index
 # ------------------------------------------------
 
 def extract_truncated_sequence(
@@ -166,8 +166,8 @@ def target_genes_3utr(gff_file, header_dict, max_len=1000):
             chrom = cols[0]
             chrom2 = header_dict[chrom]
             
-            start = int(cols[3]) - 1  # 1-based → 0-based
-            end = int(cols[4])
+            start = int(cols[3]) # 1-based
+            end = int(cols[4]) # 1-based
             strand_char = cols[6]
             strand = 1 if strand_char == '+' else -1
 
@@ -197,7 +197,7 @@ def target_genes_3utr(gff_file, header_dict, max_len=1000):
 # ---------------------------------------------------
 # Parse PSL with custom gene ID and strand validation
 # ---------------------------------------------------
-def parse_psl(psl_file, celegans_gene_strand, stitch=False, min_match=20):
+def parse_psl(psl_file, celegans_gene_strand, stitch=True, min_match=20):
     """
     PSL format: [0] celegans_gene_id, [1-21] standard PSL
     Validate: PSL query strand == BED strand
@@ -222,90 +222,86 @@ def parse_psl(psl_file, celegans_gene_strand, stitch=False, min_match=20):
     hits = defaultdict(list)  # key: tName (chromosome)
     index = defaultdict(lambda: defaultdict(list)) # 
     second_index = defaultdict(int) # a counter for each chromosome
+    psl_line_count = 0 
+    hits_append = 0
 
     with open(psl_file) as f:
         for line in f:
+            
             if line.startswith(('track', '#')) or not line.strip():
                 continue
             cols = line.strip().split('\t')
             if len(cols) < 22:
                 continue
-
-            try:
-                celegans_gene_id = cols[0]
-                match = int(cols[1])
-                strand_col = cols[9]      # e.g., "++"
-                tName = cols[14]
-                tStart = int(cols[16])    # 0-based start
-                tEnd = int(cols[17])      # 0-based end (exclusive)
-                tSize = int(cols[15])     # target size
-                length = abs(tEnd - tStart) + 1
-                pident = match/length
             
-                if pident < 0.5:
-                    continue
-                
-                # Get query strand and target strand
-                if len(strand_col) != 2:
-                    continue
-                q_str_psl = strand_col[0]   # query strand in PSL
-                t_str_psl = strand_col[1]   # target strand in PSL
+            psl_line_count += 1
 
-                # Validate query strand consistency
-                # if not then change both strand for query and target
-                true_strand = celegans_gene_strand[celegans_gene_id]
-                if q_str_psl != true_strand:
-                    if q_str_psl == "-":  # strand mismatch
-                        q_str_psl = "+"
-                    else:
-                        q_str_psl = "-"
-                    if t_str_psl == "-":
-                        t_str_psl = "+"
-                    else:
-                        t_str_psl = "-"
-                
-                if t_str_psl == "-":
-                    strand = -1
-                else:
-                    strand = 1
- 
-                # Calculate GFF coordinates (1-based, inclusive)
-                if t_str_psl == '+':
-                    gff_start = tStart + 1  # Convert 0-based to 1-based
-                    gff_end = tEnd          # Already exclusive, so no +1 needed
-                else:  # t_str_psl == '-'
-                    # For negative strand, coordinates need to be transformed
-                    # using target size
-                    gff_start = tSize - tEnd + 1      # Convert and reverse
-                    gff_end = tSize - tStart          # Convert and reverse
-                    # Note: tEnd becomes start and tStart becomes end when reversed
-               
-                # if stitch is on, the original index is useless 
-                if not stitch:
-                    index[tName][celegans_gene_id].append(second_index[tName]) 
-                    second_index[tName] += 1
-                
-                hits[tName].append({
-                    "tStart": tStart,
-                    "tEnd": tEnd,
-                    "tStrand": t_str_psl,
-                    "celegans_gene_id": celegans_gene_id,
-                    "length": tEnd - tStart,
-                    "gff_start": gff_start,
-                    "gff_end": gff_end,
-                    "gff_strand": t_str_psl,  # Same as target strand
-                    "strand":strand
-                })
-                
+            celegans_gene_id = cols[0]
+            match = int(cols[1])
+            strand_col = cols[9]      # e.g., "++"
+            tName = cols[14]
+            tStart = int(cols[16])    # 0-based start
+            tEnd = int(cols[17])      # 0-based end (exclusive)
+            tSize = int(cols[15])     # target size
+            length = abs(tEnd - tStart) + 1
+            pident = match/length
         
-            except (ValueError, IndexError):
-                continue
-    
+            q_str_psl = strand_col[0]   # query strand in PSL
+            t_str_psl = strand_col[1]   # target strand in PSL
+
+            # Validate query strand consistency
+            # if not then change both strand for query and target
+            true_strand = celegans_gene_strand[celegans_gene_id]
+            if q_str_psl != true_strand:
+                if q_str_psl == "-":  # strand mismatch
+                    q_str_psl = "+"
+                else:
+                    q_str_psl = "-"
+                if t_str_psl == "-":
+                    t_str_psl = "+"
+                else:
+                    t_str_psl = "-"
+            
+            if t_str_psl == "-":
+                strand = -1
+            else:
+                strand = 1
+
+            # Calculate GFF coordinates (1-based, inclusive)
+            if t_str_psl == '+':
+                gff_start = tStart + 1  # Convert 0-based to 1-based
+                gff_end = tEnd          # Already exclusive, so no +1 needed
+            else:  # t_str_psl == '-'
+                # For negative strand, coordinates need to be transformed
+                # using target size
+                gff_start = tSize - tEnd + 1      # Convert and reverse
+                gff_end = tSize - tStart          # Convert and reverse
+                # Note: tEnd becomes start and tStart becomes end when reversed
+           
+            if stitch:
+                index[tName][celegans_gene_id].append(second_index[tName]) 
+                second_index[tName] += 1
+            
+            hits[tName].append({
+                "tStart": tStart,
+                "tEnd": tEnd,
+                "tStrand": t_str_psl,
+                "celegans_gene_id": celegans_gene_id,
+                "length": tEnd - tStart,
+                "gff_start": gff_start,
+                "gff_end": gff_end,
+                "gff_strand": t_str_psl,  # Same as target strand
+                "strand":strand
+            })
+            hits_append += 1
+
+    print(f"Processed : {str(psl_line_count)} line")
+    print(f"the number of hits append into the hit dictionary {hits_append}")
 
     if stitch:
         
         # rebuild the index here
-        clean_hits = X626(hits_dict, index)
+        clean_hits = X626(hits, index)
         
         return clean_hits
 
@@ -354,22 +350,26 @@ def overlaps_3prime_region(hits, index, gene_info, min_overlap = 20):
     
 # ---------------------------------------------------
 # part of stitch function (X626) This idea had never been 
-# generated by deepseek and qwen
+# generated by deepseek and qwen 
 # ---------------------------------------------------
 
-def rolling_merge(candidate_list, threshold = 30, strand=None):
+def rolling_merge(candidate_list=None, gene_name=None, threshold = 30, strand=None):
     
 
     # init
-    sorted_condidate = sorted(candidate_list, key=lambda x: x['tStart'])
-    start_list = [candidate_list[i]["gff_start"] for i in range(len(sorted_condidate))]
-    end_list = [candidate_list[i]["gff_end"] for i in range(len(sorted_condidate))]
+    sorted_condidate = sorted(candidate_list, key=lambda x: x['gff_start'])
+    start_list = [sorted_condidate[i]["gff_start"] for i in range(len(sorted_condidate))]
+    end_list = [sorted_condidate[i]["gff_end"] for i in range(len(sorted_condidate))]
+    
+    if len(candidate_list) == 1:
+        return candidate_list
     
     n = len(start_list)
     i = 0
 
-    while i < n:
-    
+    while i < (n-1):
+        #print("The i" + str(i))
+        #print("The n" + str(n))
         # situation 1 + 2
         if end_list[i] + threshold >= start_list[i+1]:
             start_list.pop(i+1)
@@ -390,7 +390,8 @@ def rolling_merge(candidate_list, threshold = 30, strand=None):
         n = len(start_list)
 
     # Generate the clean out
-    output = [{"gff_start" : start_list[i], "gff_end" : end_list[i], "strand": strand} for i in range(len(start_list))]
+    output = [{"celegans_gene_id": gene_name, "gff_start" : start_list[i], "gff_end" : end_list[i], "strand": strand} for i in range(len(start_list))]
+    #print(output)
     return output
 
 # --------------------------------------------------
@@ -398,18 +399,27 @@ def rolling_merge(candidate_list, threshold = 30, strand=None):
 # --------------------------------------------------
 
 def X626(raw_dict, index, max_gap = 30):
-         
-    # 
+    #print("The index dict")
+    #print(index)         
+    #print("the raw stitich dictionary")
+    #print(raw_dict)
+    output_dict = defaultdict(list) # keep the same data structure as raw_dict
     for Chr, gene_list in index.items():
         for gene_name, gene_index in gene_list.items():
             Plus_stitch_candidate_list = [raw_dict[Chr][i] for i in gene_index if raw_dict[Chr][i]["tStrand"] == "+"]
             Minus_stitch_candidate_list = [raw_dict[Chr][i] for i in gene_index if raw_dict[Chr][i]["tStrand"] == "-"] 
-            Plus_clean = rolling_merge(Plus_stitch_candidate_list, threshold= max_gap, strand = "+")
-            Minus_clean = rolling_merge(Minus_stitch_candidate_list, threshold= max_gap, strand = "-")
-    
-
-    # return is a list of dictionaries with gff_start, gff_end and strand
-    return Plus_clean + Minus_clean
+            if Plus_stitch_candidate_list:
+                Plus_clean = rolling_merge(Plus_stitch_candidate_list, gene_name, threshold= max_gap, strand  = 1)
+            else:
+                Plus_clean = []
+            if Minus_stitch_candidate_list:
+                Minus_clean = rolling_merge(Minus_stitch_candidate_list, gene_name, threshold= max_gap, strand = -1)
+            else:
+                Minus_clean = []
+            output_dict[Chr].extend(Plus_clean + Minus_clean) 
+    print("The merged psl hits")
+    print(output_dict)
+    return output_dict
 
 
 # ---------------------------------------------------
@@ -425,10 +435,10 @@ def find_polyA(seq=None, motifs=["AATAAA"]):
             i_list.append(i)
     
     if len(i_list) == 1:
-        return(i + 3)
+        return(i + 6)
     elif len(i_list) == 2:
         i = min(i_list)
-        return(i + 3)
+        return(i + 6)
     else:
         return len(seq)
 
@@ -468,6 +478,7 @@ def build_genomic_interval_tree(
         tree = IntervalTree()
         
         for idx, feature in enumerate(features):
+            print(feature)
             start = feature['gff_start']
             end = feature['gff_end']
             strand = feature.get('strand', 1)  # Default to forward strand if not specified
@@ -511,9 +522,11 @@ def main():
 
     # psl import and build the tree
     psl_hits = parse_psl(args.psl, celegans_gene_strand)
-    print_memory_usage("# parse psl hit")
+    print("the total psl hits")
+    print(psl_hits)
+    #print_memory_usage("# parse psl hit")
     tree_index = build_genomic_interval_tree(psl_hits)
-    print_memory_usage("# tree index built")
+    #print_memory_usage("# tree index built")
 
     # Parse OrthoFinder: build target_gene -> celegans_gene map
     df = pd.read_csv(args.orthofinder, sep="\t", index_col=0)
@@ -537,7 +550,6 @@ def main():
                     target_to_celegans[g] = cegs + target_to_celegans[g]
                 else:
                     target_to_celegans[g] = cegs
-    print(ortho_dict)    
 
     # Stats
     stats = defaultdict(int)
@@ -556,7 +568,7 @@ def main():
         if valid_hits:
             # homology with N2 protein
             # no homology with N2 protein
- 
+
             for single_hit in valid_hits: 
                 # Find the ortholog information here            
                 # homology mapping 
@@ -601,6 +613,7 @@ def main():
                                               "predict": False}
                     if single_hit["gff_start"] < gene_info["utr_start"]:
                         polished[record_title]["predict"] = True
+                print(polished[record_title])
         else:
             #print(f"No psl hits match with {args.target_species} {gene_id}")
             if target_to_celegans[gene_id]:
@@ -626,12 +639,14 @@ def main():
             if coord["predict"]:
                 seq = extract_truncated_sequence(target_genome, coord["chrom"], coord["start"], coord["end"], coord["strand"])
                 end = find_polyA(seq=seq)
-                seq = seq[:end]
-                id = id + "_AAUAAA"
+                seq2 = seq[:end]
+                if seq == seq2:
+                    id = id + "_1kb"
+                else:
+                    id = id + "_AAUAAA"
+                    seq = seq2
             else:
-                if coord["strand"] == 1:
-                    seq = extract_truncated_sequence(target_genome, coord["chrom"], coord["start"], coord["end"], coord["strand"])
-                
+                seq = extract_truncated_sequence(target_genome, coord["chrom"], coord["start"], coord["end"], coord["strand"])
             out.write(f">{id}\n{seq}\n")
     out.close()
 

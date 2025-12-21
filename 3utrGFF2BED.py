@@ -83,10 +83,10 @@ def parse_three_prime_utrs(gtf_path=None, genome=None):
         if gene not in utr_dict:
         # use ployA finder here 
             if coord['strand_int']  == 1:
-                utr_start = coord['end']
+                utr_start = coord['end'] + 1
                 utr_end = utr_start + 1000 
             else:
-                utr_end = coord['start']
+                utr_end = coord['start'] - 1
                 utr_start = utr_end - 1000 
 
             seq = extract_truncated_sequence(genome_dict, coord['chrom'], utr_start, utr_end, coord['strand_int'])
