@@ -20,8 +20,29 @@ def extract_chromosome_info(header):
         r'chr\s*[:\s]\s*([IVX0-9]+)',        # chr: I, chr: 1, etc.
         r'chromosome\s*=\s*([IVX0-9]+)',     # chromosome=I
         r'chr\s*=\s*([IVX0-9]+)',            # chr=I
+        r'chr([IVX0-9]+)' #chr0, chr1, chrI, chrII
     ]
+
+    AF_16_patterns = r'(cb25.\S+)[,]'
+    Scaffold_pattern = r'(Scaffold_\S+)[,]'
+    remanei_pattern = r'(ScDsagR_\S+)[,]'
     
+    match2 = re.search(AF_16_patterns, header, re.IGNORECASE)
+    if match2:
+        return match2.group(1) 
+    
+    
+    match4 = re.search(remanei_pattern, header, re.IGNORECASE)
+    if match4:
+        return match4.group(1)
+    
+    # Check for mitochondrion
+    if re.search(r'mitochondrion|mtDNA|mitochondrial', header, re.IGNORECASE):
+        return 'MtDNA'
+
+    if re.search(r"contig: (\S+),", header):
+        return re.search(r"contig: (\S+),", header).group(1)
+
     for pattern in chromosome_patterns:
         match = re.search(pattern, header, re.IGNORECASE)
         if match:
@@ -35,9 +56,10 @@ def extract_chromosome_info(header):
                     return roman_numerals[chrom_num - 1]
             return chrom
     
-    # Check for mitochondrion
-    if re.search(r'mitochondrion|mtDNA|mitochondrial', header, re.IGNORECASE):
-        return 'MtDNA'
+    match3 = re.search(Scaffold_pattern, header, re.IGNORECASE) 
+    if match3:
+        return match3.group(1)
+
     
     return None
 

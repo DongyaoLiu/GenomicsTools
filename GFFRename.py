@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 import pandas as pd
 from collections import defaultdict
+import warnings
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Update GFF files using rename table')
@@ -20,10 +21,10 @@ def create_header_mapping(rename_table_path):
     df = pd.read_csv(rename_table_path, sep='\t')
     
     # Create mapping: {filename: {original_header: output_header}}
-    modified_mapping = defaultdict()
+    modified_mapping = defaultdict(str)
     
     # Create mapping: {cactus_name: output_header} for fallback
-    cactus_mapping = defaultdict()
+    cactus_mapping = defaultdict(str)
     
     for _, row in df.iterrows():
         # cactus_name	output_header	header_modified
@@ -65,7 +66,10 @@ def update_gff_file(gff_file, mappings, output_file):
                 elif mappings[1][seqid]:
                     updated_seqid = mappings[1][seqid]
                 else:
-                    raise ValueError(f"The seqid :{seqid} could not found in any transfer name dictionary")
+                    updated_seqid = seqid
+                    message = f"The seqid of {gff_file} :{seqid} could not found in any transfer name dictionary"
+                    warnings.warn(message)
+                    #raise ValueError(f"The seqid :{seqid} could not found in any transfer name dictionary")
                 parts = line.split('\t')
                 parts[0] = updated_seqid
                 line = '\t'.join(parts)
@@ -89,17 +93,18 @@ def main():
     # Also look for other common GFF extensions
     if not gff_files:
         gff_files = list(gff_folder.glob('*.gff3')) + list(gff_folder.glob('*.gff2')) + list(gff_folder.glob('*.gff'))
-    
+        gtf_files = list(gff_folder.glob('*.gtf')) 
     if not gff_files:
         print(f"No GFF files found in {args.gff_folder}")
         print(f"Looking for extension: gff3, gff2, gff")
         return
     
-    print(f"Found {len(gff_files)} GFF files to process")
+    print(f"Found {len(gff_files)} GFF files and {len(gtf_files)} GTF to process")
     
     # Process each GFF file
     stats = {'updated': 0, 'skipped': 0, 'total_files': 0}
     
+    gff_files = gff_files + gtf_files
     for gff_file in gff_files:
         print(f"Processing: {gff_file.name}")
         
