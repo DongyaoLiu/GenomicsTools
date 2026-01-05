@@ -82,12 +82,34 @@ def IsNCBI(fn):
         for l in infile:
             if l.startswith(">"):
                 l = l.rstrip()
-                if l.startswith(">NP_") and l.endswith("]"): return True
-                elif l.startswith(">XP_") and l.endswith("]"): return True
-                elif l.startswith(">YP_") and l.endswith("]"): return True
-                elif l.startswith(">WP_") and l.endswith("]"): return True
+                if re.search(r"NP_|XP_|YP_|WP_", l): return True
                 return False
     return False
+
+def IsAUGUSTUS(fn):
+    with open(fn, 'r') as infile:
+        for l in infile:
+            if l.startswith(">"):
+                if re.search(r"g[0-9]+[.]t[0-9]+", l): return True
+            return False
+
+def GetGeneName_AUGUSTUS(acc_line):
+    if re.search(r"(g[0-9]+)", acc_line):
+        return re.search(r"(g[0-9]+)", acc_line).group(1)
+    else: return re.search(r">(\S+)", acc_line).group(1)
+
+def IsOther(fn):
+    with open(fn, 'r') as infile:
+        for l in infile:
+            if l.startswith(">"):
+                if re.search(r"[0-9]+[.][tT]{0,1}[0-9]+", l):return True
+            return False
+            
+def GetGeneName_Other(acc_line):
+    if re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", acc_line):
+        return re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", acc_line).group(1)
+        
+    else: re.search(r">(\S+)", acc_line).group(1)
 
 def GetGeneName_NCBI(acc_line):
     acc_line = acc_line[1:]
@@ -222,6 +244,14 @@ def main(args=None):
             gene_name_function_name=GetGeneName_Wormbase
             q_use_original_accession_line = False
             print("detect the wormbase annotation")
+        elif IsAUGUSTUS(fn):
+            gene_name_function_name=GetGeneName_AUGUSTUS
+            q_use_original_accession_line = False
+            print("detect the AUGUSTUS annotation")
+        elif IsOther(fn):
+            gene_name_function_name=GetGeneName_Other
+            q_use_original_accession_line = False    
+            print("detect the other format")
         else:
             # This is the default, unless we can determine that it is an NCBI
             # file in which case it needs special processing
