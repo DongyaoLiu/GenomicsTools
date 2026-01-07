@@ -106,8 +106,8 @@ def IsOther(fn):
             return False
             
 def GetGeneName_Other(acc_line):
-    if re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", acc_line):
-        return re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", acc_line).group(1)
+    if re.search(r">(\S+[0-9]+)\.[tT]?[0-9]?", acc_line):
+        return re.search(r">(\S+[0-9]+)\.[tT]?[0-9]?", acc_line).group(1)
         
     else: re.search(r">(\S+)", acc_line).group(1)
 

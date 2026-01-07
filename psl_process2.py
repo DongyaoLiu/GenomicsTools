@@ -6,6 +6,7 @@ import os
 import bisect
 import argparse
 import pandas as pd
+import glob
 from typing import List, Dict, Tuple, Set, Any, Optional
 from Bio import SeqIO
 from Bio.Seq import Seq
@@ -113,19 +114,19 @@ def extract_truncated_sequence(
 # Custmized function. header mapper
 # Chr name in gff file is a little different from psl file
 #--------------------------------------------------
-
-def header_mapper(rename_file, species):
-    names_dict = {}
-    with open(rename_file, "r") as f:
-        for line in f:
-            elements = line.strip().split()
-            if len(elements) != 3:
-                print(f"{line} doesn't has three elements")
-                continue
-            elif re.search(species, elements[0]):
-                names_dict[elements[2]] = elements[1]
-    return names_dict
-
+#
+#def header_mapper(rename_file, species):
+#    names_dict = {}
+#    with open(rename_file, "r") as f:
+#        for line in f:
+#            elements = line.strip().split()
+#            if len(elements) != 3:
+#                print(f"{line} doesn't has three elements")
+#                continue
+#            elif re.search(species, elements[0]):
+#                names_dict[elements[2]] = elements[1]
+#    return names_dict
+#
 
 # ---------------------------------------------------
 # Parse C. elegans 3' UTR BED → gene_id -> strand
@@ -153,18 +154,26 @@ def parse_celegans_utr_bed(bed_file):
 # ---------------------------------------------------
 # Parse target GFF → gene info
 # ---------------------------------------------------
-def target_genes_3utr(gff_file, header_dict, max_len=1000):
+def target_genes_3utr(gff_file, header_dict=None, max_len=1000):
+    if not re.search(r"(gtf|gff)", gff_file):
+        gff_file = glob.glob(f"{gff_file}*")[0]
+
     genes = {}
-    with open(gff_file) as f:
+    with open(gff_file, 'r') as f:
         for line in f:
             if line.startswith('#') or not line.strip():
                 continue
             cols = line.strip().split('\t')
-            if len(cols) < 9 or cols[2] != 'gene':
-                continue
 
+            # add regular expression for both gtf and gff file.
+            if cols[2] not in ["transcript", "mRNA"] or len(cols) < 9:
+                continue
+                                
             chrom = cols[0]
-            chrom2 = header_dict[chrom]
+            if header_dict:
+                chrom2 = header_dict[chrom]
+            else:
+                chrom2 = chrom
 
             start = int(cols[3]) # 1-based
             end = int(cols[4]) # 1-based
@@ -176,6 +185,11 @@ def target_genes_3utr(gff_file, header_dict, max_len=1000):
                 if attr.startswith('ID='):
                     gene_id = attr[3:]
                     break
+                if re.search(r"transcript_id \"(\S+)\"", attr):
+                    #This is for gtf format extraction
+                    gene_id = re.search(r"transcript_id \"(\S+)\"", attr).group(1)
+                    break
+                
             if strand == 1:
                 utr_start = end + 1
                 utr_end = utr_start + max_len
@@ -407,7 +421,6 @@ def X626(raw_dict, index, max_gap = 30):
                 Minus_clean = []
             output_dict[Chr].extend(Plus_clean + Minus_clean)
     print("The merged psl hits")
-    print(output_dict)
     return output_dict
 
 
@@ -430,6 +443,26 @@ def find_polyA(seq=None, motifs=["AATAAA"]):
         return(i + 6)
     else:
         return len(seq)
+
+# ---------------------------------------------------
+# gene_name extraction 
+# ---------------------------------------------------
+
+def geneNameExtraction(gene):
+
+    if re.search(r"(g[0-9]+)", gene):
+        #AUGUSTUS
+        return re.search(r"(g[0-9]+)", gene).group(1)
+    elif re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", gene):
+        #Other
+        return re.search(r"(\S+[0-9]+)\.[tT]?[0-9]?", gene).group(1)
+    elif re.search(r"WBGene", gene):
+        return gene
+    else:
+        return gene 
+        
+    
+
 
 
 # ---------------------------------------------------
@@ -467,7 +500,6 @@ def build_genomic_interval_tree(
         tree = IntervalTree()
 
         for idx, feature in enumerate(features):
-            print(feature)
             start = feature['gff_start']
             end = feature['gff_end']
             strand = feature.get('strand', 1)  # Default to forward strand if not specified
@@ -493,7 +525,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--psl", required=True, help="Custom PSL: [celegans_gene_id] + 21 standard cols")
     parser.add_argument("--celegans-utr-bed", required=True, help="C. elegans 3' UTR BED (col4=geneID, col6=strand)")
-    parser.add_argument("--target-gff", required=True)
+    parser.add_argument("--target-gff", required=True, type=str)
     parser.add_argument("--target-genome", required=True)
     parser.add_argument("--orthofinder", required=True)
     parser.add_argument("--target-species", required=True, help="Target species name")
@@ -504,34 +536,33 @@ def main():
 
 
     # Load data
-    header_dict = header_mapper(args.rename_file, args.target_species)
+    # header_dict = header_mapper(args.rename_file, args.target_species)
     celegans_gene_strand = parse_celegans_utr_bed(args.celegans_utr_bed)
     target_genome = SeqIO.to_dict(SeqIO.parse(args.target_genome, "fasta"))
-    target_genes = target_genes_3utr(args.target_gff, header_dict)
+    target_genes = target_genes_3utr(args.target_gff)
 
     # psl import and build the tree
     psl_hits = parse_psl(args.psl, celegans_gene_strand)
     print("the total psl hits")
-    print(psl_hits)
-    #print_memory_usage("# parse psl hit")
     tree_index = build_genomic_interval_tree(psl_hits)
-    #print_memory_usage("# tree index built")
 
     # Parse OrthoFinder: build target_gene -> celegans_gene map
     df = pd.read_csv(args.orthofinder, sep="\t", index_col=0)
 
     target_to_celegans = defaultdict(list)
     ortho_dict = defaultdict(str)
-    # key(target speceis id):value(the whole gene list of the same orthogrop in C. elegans)
 
     for _, row in df.iterrows():
 
         # for each row, they are in the same ortho group
-        cegs = str(row.get("c_elegans.PRJNA13758.WS285.protein")).split(", ")
+        # should be WBGene\d+
+        cegs = str(row.get("Caenorhabditis_elegans.proteins")).split(", ")
+        
+        # target genes
         tgs = str(row.get(f"{args.target_species}.proteins")).split(", ")
         # C. elegans genes and target species gene are in the same ortho group
         cegs = [g for g in cegs if g and g != None]
-        tgs = [re.search(r"(FUN_\d+)", g).group(1) for g in tgs if g and re.search(r"FUN_\d+", g)]
+        tgs = [re.search(r"(\S+)", g).group(1) for g in tgs if g and re.search(r"(\S+)", g)]
         if tgs:
             for g in tgs:
                 ortho_dict[g] = _
@@ -539,29 +570,36 @@ def main():
                     target_to_celegans[g] = cegs + target_to_celegans[g]
                 else:
                     target_to_celegans[g] = cegs
-
+    #print(target_to_celegans)    
     # Stats
     stats = defaultdict(int)
 
     polished = defaultdict(str)
     polished_count = defaultdict(int)
+
+
     # Begin the loop from the target species parsed gff file
     for gene_id, gene_info in target_genes.items():
         print_memory_usage(f"#loop {stats["total"]}")
+        
+        gene_id2 = geneNameExtraction(gene_id)
+        print(gene_id)
 
         # init
         stats["total"] += 1
-
+        print(gene_info)
         valid_hits = overlaps_3prime_region(psl_hits, tree_index, gene_info)
 
         if valid_hits:
             # homology with N2 protein
             # no homology with N2 protein
-
+            print("#There are validated hits")
             for single_hit in valid_hits:
                 # Find the ortholog information here
                 # homology mapping
-                egs_gene_list = target_to_celegans[gene_id]
+
+                # TODO:add more code for robust handdling of not match error
+                egs_gene_list = target_to_celegans[gene_id2]
                 print(f"# The single hit: {single_hit}")
                 print(f"# The target species gene: {gene_id}, the gene info {gene_info}")
 
