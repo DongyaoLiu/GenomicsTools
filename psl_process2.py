@@ -570,6 +570,7 @@ def main():
                     target_to_celegans[g] = cegs + target_to_celegans[g]
                 else:
                     target_to_celegans[g] = cegs
+    #print(ortho_dict)
     #print(target_to_celegans)    
     # Stats
     stats = defaultdict(int)
@@ -618,7 +619,7 @@ def main():
                 if single_hit["celegans_gene_id"] in egs_gene_list:
                     print(f"{record_title}\tpsl_homology_both\t{",".join(target_to_celegans[gene_id])}")
                     stats["psl_homology_both"] += 1
-                    Orthogroup = ortho_dict[gene_id]
+                    Orthogroup = ortho_dict[gene_id2]
                     record_title = record_title + f"_{Orthogroup}"
                 else:
                     stats["psl_only_protein_divergent"] += 1
@@ -643,8 +644,8 @@ def main():
                 print(polished[record_title])
         else:
             #print(f"No psl hits match with {args.target_species} {gene_id}")
-            if target_to_celegans[gene_id]:
-                Orthogroup = ortho_dict[gene_id]
+            if target_to_celegans[gene_id2]:
+                Orthogroup = ortho_dict[gene_id2]
                 out_id = gene_id + f"_{Orthogroup}"
                 stats["protein_homology_only_3utr_divergent"] += 1
                 print(f"{gene_id}\tprotein_homology_only_3utr_divergent\t{",".join(target_to_celegans[gene_id])}")
