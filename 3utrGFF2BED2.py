@@ -27,6 +27,7 @@ def parse_three_prime_utrs(gtf_path=None, genome=None):
     
     wb_pattern = re.compile(r'(WBGene\d{8})')
     utr_dict = defaultdict(lambda: defaultdict())
+    update_gene_dict = defaultdict(lambda: defaultdict())
     gene_dict = defaultdict(lambda: defaultdict())
     gene_list = []
     
@@ -106,6 +107,14 @@ def parse_three_prime_utrs(gtf_path=None, genome=None):
                                   "strand": "-"
                                  }
 
+        else:
+            update_gene_dict[gene] = {"chrom" : coord["chrom"],
+                                     "start" : coord["start"],
+                                     "end" : coord["end"],
+                                     "strand" : coord["strand"]
+                                    
+                                    }
+
 
     return update_gene_dict
 
@@ -126,7 +135,7 @@ def write_utrs_to_bed(utr_dict, bed_path):
         for wb_id, info in utr_dict.items():
             if info['chrom'] == "MtDNA":
                 continue
-            chrom = rename_dict[info['chrom']]
+            chrom = info['chrom']
             start_1based = info['start']
             end_1based = info['end']
             strand = info['strand']
