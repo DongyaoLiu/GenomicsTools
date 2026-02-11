@@ -16,11 +16,11 @@ def extract_chromosome_info(header):
     """Extract chromosome information from header"""
     # Try to find chromosome pattern
     chromosome_patterns = [
-        r'chromosome\s*[:\s]\s*([IVX0-9]+)',  # chromosome: I, chromosome: 1, etc.
-        r'chr\s*[:\s]\s*([IVX0-9]+)',        # chr: I, chr: 1, etc.
-        r'chromosome\s*=\s*([IVX0-9]+)',     # chromosome=I
-        r'chr\s*=\s*([IVX0-9]+)',            # chr=I
-        r'chr([IVX0-9]+)' #chr0, chr1, chrI, chrII
+        r'chromosome\s*[:\s]\s*([^\s,;]+)',  # chromosome: I, chromosome: 1, etc.
+        r'chr\s*[:\s]\s*([^\s,;]++),',        # chr: I, chr: 1, etc.
+        r'chromosome\s*=\s*([^\s,;]+)',     # chromosome=I
+        r'chr\s*=\s*([^\s,;]+)',            # chr=I
+        r'chr([^\s,;]+)' #chr0, chr1, chrI, chrII
     ]
 
     AF_16_patterns = r'(cb25.\S+)[,]'

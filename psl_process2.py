@@ -211,7 +211,7 @@ def target_genes_3utr(gff_file, header_dict=None, max_len=1000):
 # ---------------------------------------------------
 # Parse PSL with custom gene ID and strand validation
 # ---------------------------------------------------
-def parse_psl(psl_file, celegans_gene_strand, stitch=True, min_match=20):
+def parse_psl(psl_file, celegans_gene_strand, stitch=True, min_match=20, longest = False):
     """
     PSL format: [0] celegans_gene_id, [1-21] standard PSL
     Validate: PSL query strand == BED strand
@@ -281,9 +281,8 @@ def parse_psl(psl_file, celegans_gene_strand, stitch=True, min_match=20):
             else:
                 strand = 1
 
-            if stitch:
-                index[tName][celegans_gene_id].append(second_index[tName])
-                second_index[tName] += 1
+            index[tName][celegans_gene_id].append(second_index[tName])
+            second_index[tName] += 1
 
             hits[tName].append({
                 "tStart": tStart,
@@ -304,12 +303,12 @@ def parse_psl(psl_file, celegans_gene_strand, stitch=True, min_match=20):
     if stitch:
 
         # rebuild the index here
-        clean_hits = X626(hits, index)
+        hits = X626(hits, index)
+    if longest:
+        
+        hits = psl_filter(hits)
 
-        return clean_hits
-
-    else:
-        return hits
+    return hits
 
 # ---------------------------------------------------
 # Check overlap in 3' region (strand-aware)
@@ -393,19 +392,42 @@ def rolling_merge(candidate_list=None, gene_name=None, threshold = 30, strand=No
         n = len(start_list)
 
     # Generate the clean out
-    output = [{"celegans_gene_id": gene_name, "gff_start" : start_list[i], "gff_end" : end_list[i], "strand": strand} for i in range(len(start_list))]
+    output = [{"celegans_gene_id": gene_name, "gff_start" : start_list[i], "gff_end" : end_list[i], "strand": strand, "length" : end_list[i] - start_list[i], "tStart" : start_list[i] -1, "tEnd" : end_list[i] } for i in range(len(start_list))]
     #print(output)
     return output
+
+
+# --------------------------------------------------
+# psl_filter function is for picking the longest alignment of
+# target genome build dual-index here
+# --------------------------------------------------
+
+def psl_filter(raw_dict):
+    output_dict = defaultdict(list) # keep the same data structure as raw_dict
+    index_dict = defaultdict(lambda: defaultdict(list))
+    for Chr, gene_list in raw_dict.items():
+        Chr_counter = 0
+        for gene in gene_list:
+            WBid = gene["celegans_gene_id"]
+            index_dict[Chr][WBid].append(Chr_counter)
+            Chr_counter += 1
+                
+    for Chr, gene_list in index_dict.items():
+        for gene_name, gene_index in gene_list.items():
+            #print(gene_name)               
+            candidate_alignment = [raw_dict[Chr][i] for i in gene_index]
+            #print(candidate_alignment)
+            selected = max(candidate_alignment, key = lambda d:d["length"])
+            output_dict[Chr].append(selected)
+    return output_dict
+            
 
 # --------------------------------------------------
 # X626 function is for target sequence ligation. (stitch!)
 # --------------------------------------------------
 
 def X626(raw_dict, index, max_gap = 30):
-    #print("The index dict")
-    #print(index)
-    #print("the raw stitich dictionary")
-    #print(raw_dict)
+    
     output_dict = defaultdict(list) # keep the same data structure as raw_dict
     for Chr, gene_list in index.items():
         for gene_name, gene_index in gene_list.items():
