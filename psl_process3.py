@@ -155,19 +155,26 @@ def main():
                                                 gene_3utr["utr_end"], gene_3utr["strand"])
             end = find_polyA(seq=seq)
             seq2 = seq[:end]
+
+            #id0 = hited_gene["gene_name"]
+            
+            id0 = hit["celegans_gene_id"]
             if seq == seq2:
-                id = hited_gene["gene_name"]  +  "_1kb"
+                id = hited_gene["gene_name"]  +  "_1kb" + "_codingalignedto_" + hit["celegans_gene_id"]
             else:
-                id = hited_gene["gene_name"]  + "_AAUAAA"
+                id = hited_gene["gene_name"]  + "_AAUAAA" + "_codingalignedto_" + hit["celegans_gene_id"]
                 seq = seq2
             
-            if id not in predicted_name_list:
+            if id0 not in predicted_name_list:
 
-                with open(args.output_fasta, "a") as out:
+                with open(f"./predicted/{hit['celegans_gene_id']}.fa", "a") as out:
                     out.write(f">{id}\n{seq}\n")
                 out.close()
             
-            predicted_name_list.append(id)
+                with open("meta.txt", "a") as out:
+                    out.write(f"predicted\t{id}\t{hit["celegans_gene_id"]}\t{hited_gene["gene_name"]}\t{args.target_species}\n")
+                out.close()
+                predicted_name_list.append(id0)
 
             # find psl overlap overlap the 3utr alignment with this target gene and do polish. 
 
@@ -201,15 +208,18 @@ def main():
                         seq2 = extract_truncated_sequence(target_genome, gene_3utr["chrom"], select_hit["gff_start"], gene_3utr["utr_end"], gene_3utr["strand"])
 
                 try:
-                    id = hited_gene["gene_name"] + "_polishedby_" + hit["celegans_gene_id"]
+                    id = hited_gene["gene_name"] + "_utrpolishedby_" + hit["celegans_gene_id"]
                 
                     # write the out put for polished one. 
-                    with open(args.output_fasta, "a") as out:
+                    with open(f"./polished/{hit['celegans_gene_id']}.fa", "a") as out:
                         out.write(f">{id}\n{seq2}\n")
                     out.close() 
+
+                    with open("meta.txt", "a") as out:
+                        out.write(f"polished\t{id}\t{hit["celegans_gene_id"]}\t{hited_gene["gene_name"]}\t{args.target_species}\n")
+                    out.close()
                 except NameError:
                     continue
-
 
 main()
             
