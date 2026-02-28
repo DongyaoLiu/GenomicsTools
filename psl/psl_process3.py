@@ -141,6 +141,8 @@ def main():
         for hit in gene_list:
         
             # The hit gene should be the best homology in the target speceis.
+            # There is a bug that the function could not pick the best one target homolog
+            # if they are located in two different chromosome. 
             hited_gene = overlaps_gene_region(target_annotation, tree_index, hit, Chr)        
             
             if not hited_gene:
