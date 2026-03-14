@@ -26,8 +26,9 @@ def process_psl_file(input_file, output_folder, query_col=0, target_col=14, matc
     """
     
     # Define column names for PSL format (0-based, 21 columns)
+    # 
     psl_columns = [
-        'matches', 'misMatches', 'repMatches', 'nCount', 'qNumInsert', 
+        'WBid','matches', 'misMatches', 'repMatches', 'nCount', 'qNumInsert', 
         'qBaseInsert', 'tNumInsert', 'tBaseInsert', 'strand', 'qName', 
         'qSize', 'qStart', 'qEnd', 'tName', 'tSize', 'tStart', 'tEnd', 
         'blockCount', 'blockSizes', 'qStarts', 'tStarts'
@@ -43,27 +44,36 @@ def process_psl_file(input_file, output_folder, query_col=0, target_col=14, matc
         matches_col_name = psl_columns[matches_col]
         
         # Group by query and target columns
-        grouped = df.groupby([query_col_name, target_col_name])
+        group_by_query = df.groupby(query_col_name)
         
-        # For each group, keep the row with the maximum matches
-        filtered_rows = []
+        filtered_df = []
         
-        for group_keys, group in grouped:
-            # Find the row with maximum matches
-            max_matches_idx = group[matches_col_name].idxmax()
-            best_row = group.loc[max_matches_idx]
-            filtered_rows.append(best_row)
+        for group_keys, group in group_by_query:
+
+            if len(group) > 1:
+                #print(group)
+                max_row_idx = group['matches'].idxmax()
+                    
+                max_group = group.loc[max_row_idx, 'tName']
+                #print("max_group " + max_group)
+                result = group[group['tName'] == max_group]
+                #print(result)
+                filtered_df.append(result)
+
+            else:
+                filtered_df.append(group)
+        
         
         # Create filtered dataframe
-        filtered_df = pd.DataFrame(filtered_rows)
+        combined_df = pd.concat(filtered_df, ignore_index=True)
         
         # Generate output filename
         output_file = os.path.join(output_folder, os.path.basename(input_file))
         
         # Save filtered dataframe
-        filtered_df.to_csv(output_file, sep='\t', header=False, index=False)
+        combined_df.to_csv(output_file, sep='\t', header=False, index=False)
         
-        return (os.path.basename(input_file), len(df), len(filtered_df), len(grouped))
+        return (os.path.basename(input_file), len(df), len(combined_df))
         
     except Exception as e:
         print(f"Error processing {input_file}: {str(e)}", file=sys.stderr)
@@ -192,7 +202,7 @@ Column indices (0-based):
             matches_col=args.matches_col
         )
         
-        filename, original_count, filtered_count, group_count = result
+        filename, original_count, filtered_count = result
         
         if original_count > 0:
             successful_files += 1
